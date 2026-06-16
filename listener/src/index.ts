@@ -12,7 +12,9 @@ function loadConfig(): Config {
     contractAddresses: JSON.parse(process.env.CONTRACT_ADDRESSES || '[]'),
     pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS || '30000'),
     maxReconnectAttempts: parseInt(process.env.MAX_RECONNECT_ATTEMPTS || '5'),
-    reconnectDelayMs: parseInt(process.env.RECONNECT_DELAY_MS || '5000')
+    reconnectDelayMs: parseInt(process.env.RECONNECT_DELAY_MS || '5000'),
+    queueMaxRetries: parseInt(process.env.QUEUE_MAX_RETRIES || '3'),
+    queueRetryDelayMs: parseInt(process.env.QUEUE_RETRY_DELAY_MS || '1000'),
   };
 }
 

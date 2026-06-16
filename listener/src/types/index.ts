@@ -10,4 +10,6 @@ export interface Config {
   pollIntervalMs: number;
   maxReconnectAttempts: number;
   reconnectDelayMs: number;
+  queueMaxRetries: number;
+  queueRetryDelayMs: number;
 }
