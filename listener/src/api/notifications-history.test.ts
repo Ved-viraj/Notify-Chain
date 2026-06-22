@@ -63,6 +63,14 @@ describe('GET /api/notifications/history', () => {
     await db.close();
   });
 
+  beforeEach(async () => {
+    await db.run('DELETE FROM notification_execution_log');
+    await db.run('DELETE FROM scheduled_notifications');
+    await db.run(
+      "DELETE FROM sqlite_sequence WHERE name IN ('scheduled_notifications', 'notification_execution_log')"
+    );
+  });
+
   afterEach(async () => {
     if (server) await closeServer(server);
   });
@@ -74,6 +82,8 @@ describe('GET /api/notifications/history', () => {
     expect(status).toBe(200);
     expect((body as any).records).toEqual([]);
     expect((body as any).total).toBe(0);
+    expect((body as any).itemCount).toBe(0);
+    expect((body as any).totalPages).toBe(0);
     expect((body as any).limit).toBeDefined();
     expect((body as any).offset).toBeDefined();
   });
@@ -109,6 +119,8 @@ describe('GET /api/notifications/history', () => {
     expect(status).toBe(200);
     expect((body as any).records.length).toBe(2);
     expect((body as any).total).toBe(5);
+    expect((body as any).itemCount).toBe(5);
+    expect((body as any).totalPages).toBe(3);
     expect((body as any).limit).toBe(2);
     expect((body as any).offset).toBe(0);
   });
@@ -146,10 +158,61 @@ describe('GET /api/notifications/history', () => {
     );
 
     expect(status).toBe(200);
-    expect((body as any).records.length).toBeGreaterThan(0);
+    expect((body as any).records.length).toBe(1);
+    expect((body as any).itemCount).toBe(1);
+    expect((body as any).totalPages).toBe(1);
+    expect((body as any).total).toBe((body as any).itemCount);
     (body as any).records.forEach((record: any) => {
       expect(record.status).toBe('SUCCESS');
     });
+  });
+
+  it('normalizes negative limit and offset query params', async () => {
+    server = await startServer(BASE_OPTIONS);
+
+    const { status, body } = await makeRequest(
+      server,
+      '/api/notifications/history?limit=-5&offset=-10'
+    );
+
+    expect(status).toBe(200);
+    expect((body as any).limit).toBe(1);
+    expect((body as any).offset).toBe(0);
+    expect((body as any).itemCount).toBe(0);
+    expect((body as any).totalPages).toBe(0);
+  });
+
+  it('returns pagination metadata on the last partial page', async () => {
+    server = await startServer(BASE_OPTIONS);
+
+    for (let i = 0; i < 3; i++) {
+      await db.run(
+        `INSERT INTO scheduled_notifications 
+         (payload, notification_type, target_recipient, execute_at, status)
+         VALUES (?, ?, ?, ?, ?)`,
+        [JSON.stringify({ test: true }), 'discord', 'test_user', new Date().toISOString(), 'COMPLETED']
+      );
+    }
+
+    for (let i = 1; i <= 3; i++) {
+      await db.run(
+        `INSERT INTO notification_execution_log 
+         (scheduled_notification_id, execution_attempt, execution_time, status, duration_ms)
+         VALUES (?, ?, ?, ?, ?)`,
+        [i, 1, new Date().toISOString(), 'SUCCESS', 100]
+      );
+    }
+
+    const { status, body } = await makeRequest(
+      server,
+      '/api/notifications/history?limit=2&offset=2'
+    );
+
+    expect(status).toBe(200);
+    expect((body as any).records.length).toBe(1);
+    expect((body as any).itemCount).toBe(3);
+    expect((body as any).totalPages).toBe(2);
+    expect((body as any).total).toBe((body as any).itemCount);
   });
 
   it('enforces maximum limit of 100', async () => {
@@ -162,11 +225,28 @@ describe('GET /api/notifications/history', () => {
     expect(status).toBe(200);
     expect((body as any).limit).toBeLessThanOrEqual(100);
   });
+});
+
+describe('GET /api/notifications/history database failures', () => {
+  let server: http.Server;
+  let db: Database;
+
+  beforeAll(async () => {
+    db = getDatabase(':memory:');
+    await db.initialize();
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  afterEach(async () => {
+    if (server) await closeServer(server);
+  });
 
   it('returns 500 on database error', async () => {
     server = await startServer(BASE_OPTIONS);
-    
-    // Close database to cause error
+
     await db.close();
 
     const { status } = await makeRequest(server, '/api/notifications/history');

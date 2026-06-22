@@ -292,6 +292,64 @@ Returns aggregate statistics about the scheduled-notification queue.
 
 ---
 
+## Notification Delivery History
+
+### GET /api/notifications/history
+
+Returns paginated delivery execution records from `notification_execution_log`.
+
+**Query Parameters**
+
+| Name      | Type   | Required | Description                                                       |
+|-----------|--------|----------|-------------------------------------------------------------------|
+| limit     | number | No       | Maximum records per page (default `20`, max `100`)                |
+| offset    | number | No       | Number of records to skip (default `0`)                           |
+| status    | string | No       | Filter by execution status: `SUCCESS`, `FAILED`, or `RETRY`       |
+| startDate | string | No       | ISO 8601 lower bound on `execution_time` (inclusive)              |
+| endDate   | string | No       | ISO 8601 upper bound on `execution_time` (inclusive)              |
+
+**Response `200`**
+
+```json
+{
+  "records": [
+    {
+      "id": 1,
+      "scheduledNotificationId": 42,
+      "executionAttempt": 1,
+      "executionTime": "2024-06-20T15:00:00.000Z",
+      "status": "SUCCESS",
+      "errorMessage": null,
+      "responseDuration": 120
+    }
+  ],
+  "total": 5,
+  "itemCount": 5,
+  "totalPages": 3,
+  "limit": 2,
+  "offset": 0
+}
+```
+
+| Field       | Type   | Description                                                                 |
+|-------------|--------|-----------------------------------------------------------------------------|
+| records     | array  | Execution log entries for the current page                                  |
+| total       | number | Total matching records (preserved for backward compatibility; same value as `itemCount`) |
+| itemCount   | number | Total number of records matching the query filters                          |
+| totalPages  | number | Total pages available at the requested `limit` (`0` when `itemCount` is `0`) |
+| limit       | number | Effective page size applied to the query                                    |
+| offset      | number | Number of records skipped before this page                                  |
+
+Existing clients that read `total`, `limit`, `offset`, and `records` continue to work unchanged. New clients should prefer `itemCount` and `totalPages` for pagination UI.
+
+**Response `500`** — database read failure
+
+```json
+{ "error": "SQLITE_ERROR: ..." }
+```
+
+---
+
 ## Webhooks
 
 ### POST /api/webhooks

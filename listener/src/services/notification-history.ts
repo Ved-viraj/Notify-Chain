@@ -1,5 +1,6 @@
 import { getDatabase } from '../database/database';
 import logger from '../utils/logger';
+import { buildPaginationMetadata, normalizePaginationParams } from '../utils/pagination';
 
 export interface NotificationHistoryRecord {
   id: number;
@@ -24,14 +25,15 @@ export interface PaginatedHistoryResponse {
   total: number;
   limit: number;
   offset: number;
+  itemCount: number;
+  totalPages: number;
 }
 
 export class NotificationHistoryService {
   private db = getDatabase();
 
   async getHistory(options: HistoryQueryOptions): Promise<PaginatedHistoryResponse> {
-    const limit = Math.min(options.limit || 20, 100);
-    const offset = options.offset || 0;
+    const { limit, offset } = normalizePaginationParams(options.limit, options.offset);
 
     try {
       // Build WHERE clause
@@ -88,11 +90,15 @@ export class NotificationHistoryService {
         offset,
       });
 
+      const pagination = buildPaginationMetadata(total, limit, offset);
+
       return {
         records,
         total,
-        limit,
-        offset,
+        limit: pagination.limit,
+        offset: pagination.offset,
+        itemCount: pagination.itemCount,
+        totalPages: pagination.totalPages,
       };
     } catch (error) {
       logger.error('Failed to retrieve notification history', { error });
